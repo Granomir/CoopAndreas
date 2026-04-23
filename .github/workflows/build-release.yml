@@ -56,6 +56,15 @@ jobs:
             Copy-Item "$env:GITHUB_WORKSPACE\plugin-sdk-extract\*" "$env:PLUGIN_SDK_DIR" -Recurse -Force
           }
 
+      - name: Verify plugin-sdk libraries
+        run: |
+          $pluginLib = "$env:PLUGIN_SDK_DIR\output\lib\plugin.lib"
+          if (-not (Test-Path $pluginLib)) {
+            Write-Host "plugin.lib not found at: $pluginLib"
+            Write-Host "CoopAndreas needs a built plugin-sdk, not only extracted sources."
+            throw "Missing plugin.lib"
+          }
+
       - name: Debug environment
         run: |
           Write-Host "GITHUB_WORKSPACE=$env:GITHUB_WORKSPACE"
