@@ -68,6 +68,7 @@ jobs:
         run: |
           $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
           $mainTxt = "$env:GITHUB_WORKSPACE\scm\main.txt"
+          $outScm = "$env:GITHUB_WORKSPACE\dist\main.scm"
 
           if (-not (Test-Path $mainTxt)) {
             throw "main.txt not found at $mainTxt"
@@ -78,27 +79,21 @@ jobs:
             throw "sanny.exe not found"
           }
 
-          & $sannyExe.FullName /compile $mainTxt
+          Write-Host "Using Sanny Builder: $($sannyExe.FullName)"
+          & $sannyExe.FullName --compile $mainTxt $outScm
 
-          if ($LASTEXITCODE -ne 0) {
-            throw "Sanny Builder failed with exit code $LASTEXITCODE"
-          }
+          Start-Sleep -Seconds 2
 
-          $possibleOutputs = @(
-            "$env:GITHUB_WORKSPACE\scm\main.scm",
-            "$env:GITHUB_WORKSPACE\main.scm",
-            "$env:GTA_SA_DIR\CoopAndreas\main.scm",
-            "$env:GITHUB_WORKSPACE\data\script\main.scm",
-            "$env:GITHUB_WORKSPACE\scm\data\script\main.scm"
-          )
-
-          $found = $possibleOutputs | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $found) {
+          if (-not (Test-Path $outScm)) {
+            $possibleLogs = Get-ChildItem $sannyDir -Recurse -Filter "compile.log" -ErrorAction SilentlyContinue
+            if ($possibleLogs) {
+              Write-Host "compile.log contents:"
+              Get-Content $possibleLogs[0].FullName
+            }
             throw "main.scm was not generated"
           }
 
-          Copy-Item $found "$env:GITHUB_WORKSPACE\dist\main.scm" -Force
-          Write-Host "main.scm found at $found"
+          Write-Host "main.scm generated at $outScm"
 
       - name: "Download plugin-sdk"
         run: |
