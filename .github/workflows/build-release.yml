@@ -123,7 +123,6 @@ jobs:
           Copy-Item "$sdkDir\*" $sannyDir -Recurse -Force
 
       - name: "Compile main.scm"
-        continue-on-error: true
         run: |
           $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
           $mainTxt = "$env:GITHUB_WORKSPACE\scm\main.txt"
