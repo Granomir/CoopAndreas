@@ -57,12 +57,28 @@ jobs:
           }
 
       - name: Install premake5
-        run: choco install premake.portable -y
+        run: |
+          choco install premake.portable -y
+          $premake = Get-ChildItem "C:\ProgramData\chocolatey\bin\premake5.exe" -ErrorAction SilentlyContinue
+          if (-not $premake) {
+            throw "premake5.exe was not installed by Chocolatey"
+          }
+          Write-Host "Premake installed at $($premake.FullName)"
+
+      - name: Debug premake installation
+        run: |
+          Get-ChildItem "C:\ProgramData\chocolatey\bin" | Where-Object { $_.Name -like "premake*" }
 
       - name: Build plugin-sdk project files
         run: |
           Set-Location "$env:PLUGIN_SDK_DIR"
-          premake5 --file=tools/premake/premake5.lua vs2022
+
+          $premake = "C:\ProgramData\chocolatey\bin\premake5.exe"
+          if (-not (Test-Path $premake)) {
+            throw "premake5.exe not found at $premake"
+          }
+
+          & $premake --file=tools/premake/premake5.lua vs2022
 
       - name: Build plugin-sdk library
         run: |
