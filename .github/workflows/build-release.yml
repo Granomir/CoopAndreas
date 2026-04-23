@@ -56,24 +56,25 @@ jobs:
             Copy-Item "$env:GITHUB_WORKSPACE\plugin-sdk-extract\*" "$env:PLUGIN_SDK_DIR" -Recurse -Force
           }
 
-      - name: Install premake5
+      - name: Download premake5
         run: |
-          choco install premake.portable -y
-          $premake = Get-ChildItem "C:\ProgramData\chocolatey\bin\premake5.exe" -ErrorAction SilentlyContinue
-          if (-not $premake) {
-            throw "premake5.exe was not installed by Chocolatey"
-          }
-          Write-Host "Premake installed at $($premake.FullName)"
+          $premakeZip = "$env:GITHUB_WORKSPACE\premake5.zip"
+          $premakeDir = "$env:GITHUB_WORKSPACE\premake5"
 
-      - name: Debug premake installation
-        run: |
-          Get-ChildItem "C:\ProgramData\chocolatey\bin" | Where-Object { $_.Name -like "premake*" }
+          Invoke-WebRequest -Uri "https://github.com/premake/premake-core/releases/download/v5.0.0-beta2/premake-5.0.0-beta2-windows.zip" -OutFile $premakeZip
+          Expand-Archive -Path $premakeZip -DestinationPath $premakeDir -Force
+
+          if (-not (Test-Path "$premakeDir\premake5.exe")) {
+            throw "premake5.exe was not downloaded"
+          }
+
+          Write-Host "Premake downloaded to $premakeDir\premake5.exe"
 
       - name: Build plugin-sdk project files
         run: |
           Set-Location "$env:PLUGIN_SDK_DIR"
 
-          $premake = "C:\ProgramData\chocolatey\bin\premake5.exe"
+          $premake = "$env:GITHUB_WORKSPACE\premake5\premake5.exe"
           if (-not (Test-Path $premake)) {
             throw "premake5.exe not found at $premake"
           }
