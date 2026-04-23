@@ -66,14 +66,6 @@ jobs:
           Write-Host "GITHUB_WORKSPACE=$env:GITHUB_WORKSPACE"
           Write-Host "GTA_SA_DIR=$env:GTA_SA_DIR"
           Write-Host "PLUGIN_SDK_DIR=$env:PLUGIN_SDK_DIR"
-          Write-Host "XMAKE_ROOT_Y=$env:XMAKE_ROOT_Y"
-
-          if (-not (Test-Path "$env:PLUGIN_SDK_DIR")) {
-            throw "PLUGIN_SDK_DIR path does not exist"
-          }
-
-          Write-Host "plugin-sdk root contents:"
-          Get-ChildItem "$env:PLUGIN_SDK_DIR" | Select-Object -First 20
 
       - name: Show xmake version
         run: xmake --version
@@ -95,57 +87,12 @@ jobs:
             $_.Name -in @("CoopAndreasSA.dll", "server.exe", "proxy.dll", "eax.dll")
           }
 
-          if (-not $files) {
-            throw "No build outputs found"
-          }
-
           $files | ForEach-Object {
             Copy-Item $_.FullName $dist -Force
           }
-
-          if ((Test-Path "$dist\proxy.dll") -and -not (Test-Path "$dist\eax.dll")) {
-            Copy-Item "$dist\proxy.dll" "$dist\eax.dll" -Force
-          }
-
-          @"
-CoopAndreas build from fork.
-
-Included:
-- CoopAndreasSA.dll
-- server.exe
-- eax.dll (copied from proxy.dll if needed)
-
-Not included:
-- compiled main.scm
-- GTA San Andreas game files
-
-Basic usage:
-1. Put CoopAndreasSA.dll into the GTA San Andreas folder
-2. Backup original eax.dll as eax_orig.dll
-3. Put built eax.dll into the GTA San Andreas folder
-4. Run server.exe
-"@ | Set-Content -Path "$dist\README.txt" -Encoding UTF8
-
-          Write-Host "Final dist contents:"
-          Get-ChildItem $dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: CoopAndreas-windows-build
           path: ${{ github.workspace }}\dist\*
-
-      - name: Create zip
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          Compress-Archive `
-            -Path "$env:GITHUB_WORKSPACE\dist\*" `
-            -DestinationPath "$env:GITHUB_WORKSPACE\CoopAndreas-${{ github.ref_name }}-windows.zip" `
-            -Force
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ github.workspace }}\CoopAndreas-${{ github.ref_name }}-windows.zip
-          generate_release_notes: true
