@@ -50,7 +50,7 @@ jobs:
           $sannyZip = "$env:GITHUB_WORKSPACE\sanny.zip"
           $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
 
-          Invoke-WebRequest -Uri "https://github.com/sannybuilder/dev/releases/download/v4.0.0/Sanny.Builder.v4.0.0.zip" -OutFile $sannyZip
+          Invoke-WebRequest -Uri "https://github.com/sannybuilder/dev/releases/download/v4.2.0/SannyBuilder-v4.2.0.zip" -OutFile $sannyZip
           Expand-Archive -Path $sannyZip -DestinationPath $sannyDir -Force
 
       - name: "Prepare Sanny Builder SDK"
