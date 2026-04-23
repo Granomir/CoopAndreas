@@ -45,7 +45,7 @@ jobs:
 
       - name: Download plugin-sdk
         run: |
-          $url = "https://github.com/DK22Pac/plugin-sdk/archive/refs/heads/master.zip"
+          $url = "https://github.com/DK22Pac/plugin-sdk/archive/050d18b6e1770477deab81a40028a40277583d97.zip"
           Invoke-WebRequest -Uri $url -OutFile "$env:GITHUB_WORKSPACE\plugin-sdk.zip"
           Expand-Archive -Path "$env:GITHUB_WORKSPACE\plugin-sdk.zip" -DestinationPath "$env:GITHUB_WORKSPACE\plugin-sdk-extract" -Force
 
