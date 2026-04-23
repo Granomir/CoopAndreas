@@ -1,0 +1,132 @@
+name: Build and Release CoopAndreas
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    env:
+      XMAKE_ROOT_Y: y
+      GTA_SA_DIR: ${{ github.workspace }}\gta-sa
+      PLUGIN_SDK_DIR: ${{ github.workspace }}\plugin-sdk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Prepare directories
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:GTA_SA_DIR" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:PLUGIN_SDK_DIR" | Out-Null
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+
+      - name: Download plugin-sdk
+        shell: pwsh
+        run: |
+          $url = "https://github.com/DK22Pac/plugin-sdk/archive/refs/heads/master.zip"
+
+          Invoke-WebRequest -Uri $url -OutFile "plugin-sdk.zip"
+          Expand-Archive -Path "plugin-sdk.zip" -DestinationPath "$env:GITHUB_WORKSPACE\plugin-sdk-extract" -Force
+
+          $dirs = Get-ChildItem "$env:GITHUB_WORKSPACE\plugin-sdk-extract" -Directory
+          if ($dirs.Count -eq 1) {
+            Copy-Item "$($dirs[0].FullName)\*" "$env:PLUGIN_SDK_DIR" -Recurse -Force
+          } else {
+            Copy-Item "$env:GITHUB_WORKSPACE\plugin-sdk-extract\*" "$env:PLUGIN_SDK_DIR" -Recurse -Force
+          }
+
+      - name: Show xmake version
+        run: xmake --version
+
+      - name: Build client
+        run: xmake --build client
+
+      - name: Build server
+        run: xmake --build server
+
+      - name: Build proxy
+        run: xmake --build proxy
+
+      - name: Collect outputs
+        shell: pwsh
+        run: |
+          $patterns = @(
+            "build\**\CoopAndreasSA.dll",
+            "build\**\server.exe",
+            "build\**\proxy.dll",
+            "build\**\eax.dll"
+          )
+
+          foreach ($pattern in $patterns) {
+            Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue | ForEach-Object {
+              Copy-Item $_.FullName dist -Force
+            }
+          }
+
+          # Если proxy собрался как proxy.dll, дублируем как eax.dll
+          if ((Test-Path "dist\proxy.dll") -and -not (Test-Path "dist\eax.dll")) {
+            Copy-Item "dist\proxy.dll" "dist\eax.dll" -Force
+          }
+
+          # README для артефакта
+          @"
+CoopAndreas build from fork.
+
+Included:
+- CoopAndreasSA.dll
+- server.exe
+- eax.dll (proxy, if build succeeded)
+
+Not included:
+- compiled main.scm
+- GTA San Andreas game files
+- plugin-sdk sources
+
+Usage:
+1. Put CoopAndreasSA.dll into the game folder
+2. Backup original eax.dll as eax_orig.dll
+3. Put built eax.dll into the game folder
+4. Run server.exe
+"@ | Set-Content -Path "dist\README.txt" -Encoding UTF8
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoopAndreas-windows-build
+          path: dist\*
+
+      - name: Create zip
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist\*" -DestinationPath "CoopAndreas-${{ github.ref_name }}-windows.zip" -Force
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: CoopAndreas-${{ github.ref_name }}-windows.zip
+          generate_release_notes: true
