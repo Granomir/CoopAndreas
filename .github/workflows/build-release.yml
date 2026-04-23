@@ -56,14 +56,37 @@ jobs:
             Copy-Item "$env:GITHUB_WORKSPACE\plugin-sdk-extract\*" "$env:PLUGIN_SDK_DIR" -Recurse -Force
           }
 
+      - name: Build plugin-sdk project files
+        run: |
+          Set-Location "$env:PLUGIN_SDK_DIR"
+          if (Test-Path ".\tools\premake5.exe") {
+            .\tools\premake5.exe vs2022
+          } elseif (Test-Path ".\premake5.exe") {
+            .\premake5.exe vs2022
+          } elseif (Test-Path ".\premake_vs2022.bat") {
+            .\premake_vs2022.bat
+          } else {
+            throw "Could not find premake generator in plugin-sdk"
+          }
+
+      - name: Build plugin-sdk library
+        run: |
+          Set-Location "$env:PLUGIN_SDK_DIR"
+
+          $solution = Get-ChildItem -Recurse -Filter "*.sln" | Select-Object -First 1
+          if (-not $solution) {
+            throw "plugin-sdk solution file was not generated"
+          }
+
+          msbuild $solution.FullName /m /p:Configuration=Release /p:Platform=Win32 /t:plugin_sa
+
       - name: Verify plugin-sdk libraries
         run: |
           $pluginLib = "$env:PLUGIN_SDK_DIR\output\lib\plugin.lib"
           if (-not (Test-Path $pluginLib)) {
-            Write-Host "plugin.lib not found at: $pluginLib"
-            Write-Host "CoopAndreas needs a built plugin-sdk, not only extracted sources."
-            throw "Missing plugin.lib"
+            throw "Missing plugin.lib after plugin-sdk build"
           }
+          Write-Host "Found plugin.lib at $pluginLib"
 
       - name: Debug environment
         run: |
