@@ -43,7 +43,62 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\plugin-sdk-extract" | Out-Null
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\premake5" | Out-Null
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\sanny" | Out-Null
-          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\dist" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\dist" | Out-Null      
+          
+      - name: "Download Sanny Builder 4"
+        run: |
+          $sannyZip = "$env:GITHUB_WORKSPACE\sanny.zip"
+          $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
+
+          Invoke-WebRequest -Uri "https://github.com/sannybuilder/dev/releases/download/v4.0.0/Sanny.Builder.v4.0.0.zip" -OutFile $sannyZip
+          Expand-Archive -Path $sannyZip -DestinationPath $sannyDir -Force
+
+      - name: "Prepare Sanny Builder SDK"
+        run: |
+          $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
+          $sdkDir = "$env:GITHUB_WORKSPACE\sdk\Sanny Builder 4"
+
+          if (-not (Test-Path $sdkDir)) {
+            throw "CoopAndreas Sanny Builder SDK folder not found at $sdkDir"
+          }
+
+          Copy-Item "$sdkDir\*" $sannyDir -Recurse -Force
+
+      - name: "Compile main.scm"
+        run: |
+          $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
+          $mainTxt = "$env:GITHUB_WORKSPACE\scm\main.txt"
+
+          if (-not (Test-Path $mainTxt)) {
+            throw "main.txt not found at $mainTxt"
+          }
+
+          $sannyExe = Get-ChildItem $sannyDir -Recurse -Filter "sanny.exe" | Select-Object -First 1
+          if (-not $sannyExe) {
+            throw "sanny.exe not found"
+          }
+
+          & $sannyExe.FullName /compile $mainTxt
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Sanny Builder failed with exit code $LASTEXITCODE"
+          }
+
+          $possibleOutputs = @(
+            "$env:GITHUB_WORKSPACE\scm\main.scm",
+            "$env:GITHUB_WORKSPACE\main.scm",
+            "$env:GTA_SA_DIR\CoopAndreas\main.scm",
+            "$env:GITHUB_WORKSPACE\data\script\main.scm",
+            "$env:GITHUB_WORKSPACE\scm\data\script\main.scm"
+          )
+
+          $found = $possibleOutputs | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $found) {
+            throw "main.scm was not generated"
+          }
+
+          Copy-Item $found "$env:GITHUB_WORKSPACE\dist\main.scm" -Force
+          Write-Host "main.scm found at $found"
 
       - name: "Download plugin-sdk"
         run: |
@@ -102,57 +157,6 @@ jobs:
             throw "Missing plugin.lib after plugin-sdk build"
           }
           Write-Host "Found plugin.lib at $pluginLib"
-
-      - name: "Download Sanny Builder 4"
-        run: |
-          $sannyZip = "$env:GITHUB_WORKSPACE\sanny.zip"
-          $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
-
-          Invoke-WebRequest -Uri "https://github.com/sannybuilder/dev/releases/download/v4.0.0/sb4.zip" -OutFile $sannyZip
-          Expand-Archive -Path $sannyZip -DestinationPath $sannyDir -Force
-
-      - name: "Prepare Sanny Builder SDK"
-        run: |
-          $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
-          $sdkDir = "$env:GITHUB_WORKSPACE\sdk\Sanny Builder 4"
-
-          if (-not (Test-Path $sdkDir)) {
-            throw "CoopAndreas Sanny Builder SDK folder not found at $sdkDir"
-          }
-
-          Copy-Item "$sdkDir\*" $sannyDir -Recurse -Force
-
-      - name: "Compile main.scm"
-        run: |
-          $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
-          $mainTxt = "$env:GITHUB_WORKSPACE\scm\main.txt"
-
-          if (-not (Test-Path $mainTxt)) {
-            throw "main.txt not found at $mainTxt"
-          }
-
-          $sannyExe = Get-ChildItem $sannyDir -Recurse -Filter "sanny.exe" | Select-Object -First 1
-          if (-not $sannyExe) {
-            throw "sanny.exe not found"
-          }
-
-          & $sannyExe.FullName /compile $mainTxt
-
-          $possibleOutputs = @(
-            "$env:GITHUB_WORKSPACE\scm\main.scm",
-            "$env:GITHUB_WORKSPACE\main.scm",
-            "$env:GTA_SA_DIR\CoopAndreas\main.scm",
-            "$env:GITHUB_WORKSPACE\data\script\main.scm",
-            "$env:GITHUB_WORKSPACE\scm\data\script\main.scm"
-          )
-
-          $found = $possibleOutputs | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if ($found) {
-            Copy-Item $found "$env:GITHUB_WORKSPACE\dist\main.scm" -Force
-            Write-Host "main.scm found at $found"
-          } else {
-            throw "main.scm was not generated"
-          }
 
       - name: "Debug environment"
         run: |
