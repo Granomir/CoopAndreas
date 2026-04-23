@@ -1,62 +1,67 @@
-name: Build and Release CoopAndreas
+name: "Build CoopAndreas"
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    runs-on: windows-2022
+    runs-on: "windows-2022"
 
     env:
-      XMAKE_ROOT_Y: y
-      GTA_SA_DIR: ${{ github.workspace }}\gta-sa
-      PLUGIN_SDK_DIR: ${{ github.workspace }}\plugin-sdk
+      XMAKE_ROOT_Y: "y"
+      GTA_SA_DIR: "${{ github.workspace }}\\gta-sa"
+      PLUGIN_SDK_DIR: "${{ github.workspace }}\\plugin-sdk"
 
     defaults:
       run:
-        shell: pwsh
+        shell: "pwsh"
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: "Checkout"
+        uses: "actions/checkout@v4"
         with:
           submodules: recursive
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+      - name: "Setup MSBuild"
+        uses: "microsoft/setup-msbuild@v2"
 
-      - name: Setup Visual Studio developer environment
-        uses: ilammy/msvc-dev-cmd@v1
+      - name: "Setup Visual Studio developer environment"
+        uses: "ilammy/msvc-dev-cmd@v1"
 
-      - name: Setup xmake
-        uses: xmake-io/github-action-setup-xmake@v1
+      - name: "Setup xmake"
+        uses: "xmake-io/github-action-setup-xmake@v1"
         with:
-          xmake-version: latest
+          xmake-version: "latest"
 
-      - name: Prepare directories
+      - name: "Prepare directories"
         run: |
           New-Item -ItemType Directory -Force -Path "$env:GTA_SA_DIR" | Out-Null
           New-Item -ItemType Directory -Force -Path "$env:PLUGIN_SDK_DIR" | Out-Null
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\plugin-sdk-extract" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\premake5" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\sanny" | Out-Null
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\dist" | Out-Null
 
-      - name: Download plugin-sdk
+      - name: "Download plugin-sdk"
         run: |
           $url = "https://github.com/DK22Pac/plugin-sdk/archive/050d18b6e1770477deab81a40028a40277583d97.zip"
-          Invoke-WebRequest -Uri $url -OutFile "$env:GITHUB_WORKSPACE\plugin-sdk.zip"
-          Expand-Archive -Path "$env:GITHUB_WORKSPACE\plugin-sdk.zip" -DestinationPath "$env:GITHUB_WORKSPACE\plugin-sdk-extract" -Force
+          $zip = "$env:GITHUB_WORKSPACE\plugin-sdk.zip"
+          $extractDir = "$env:GITHUB_WORKSPACE\plugin-sdk-extract"
 
-          $dirs = Get-ChildItem "$env:GITHUB_WORKSPACE\plugin-sdk-extract" -Directory
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $extractDir -Force
+
+          $dirs = Get-ChildItem $extractDir -Directory
           if ($dirs.Count -eq 1) {
             Copy-Item "$($dirs[0].FullName)\*" "$env:PLUGIN_SDK_DIR" -Recurse -Force
           } else {
-            Copy-Item "$env:GITHUB_WORKSPACE\plugin-sdk-extract\*" "$env:PLUGIN_SDK_DIR" -Recurse -Force
+            Copy-Item "$extractDir\*" "$env:PLUGIN_SDK_DIR" -Recurse -Force
           }
 
-      - name: Download premake5
+      - name: "Download premake5"
         run: |
           $premakeZip = "$env:GITHUB_WORKSPACE\premake5.zip"
           $premakeDir = "$env:GITHUB_WORKSPACE\premake5"
@@ -68,9 +73,7 @@ jobs:
             throw "premake5.exe was not downloaded"
           }
 
-          Write-Host "Premake downloaded to $premakeDir\premake5.exe"
-
-      - name: Build plugin-sdk project files
+      - name: "Build plugin-sdk project files"
         run: |
           Set-Location "$env:PLUGIN_SDK_DIR"
 
@@ -81,7 +84,7 @@ jobs:
 
           & $premake --file=tools/premake/premake5.lua vs2022
 
-      - name: Build plugin-sdk library
+      - name: "Build plugin-sdk library"
         run: |
           Set-Location "$env:PLUGIN_SDK_DIR"
 
@@ -92,7 +95,7 @@ jobs:
 
           msbuild $solution.FullName /m /p:Configuration=Release /p:Platform=Win32 /t:plugin_sa
 
-      - name: Verify plugin-sdk libraries
+      - name: "Verify plugin-sdk libraries"
         run: |
           $pluginLib = "$env:PLUGIN_SDK_DIR\output\lib\plugin.lib"
           if (-not (Test-Path $pluginLib)) {
@@ -100,38 +103,120 @@ jobs:
           }
           Write-Host "Found plugin.lib at $pluginLib"
 
-      - name: Debug environment
+      - name: "Download Sanny Builder 4"
+        run: |
+          $sannyZip = "$env:GITHUB_WORKSPACE\sanny.zip"
+          $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
+
+          Invoke-WebRequest -Uri "https://github.com/sannybuilder/dev/releases/download/v4.0.0/sb4.zip" -OutFile $sannyZip
+          Expand-Archive -Path $sannyZip -DestinationPath $sannyDir -Force
+
+      - name: "Prepare Sanny Builder SDK"
+        run: |
+          $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
+          $sdkDir = "$env:GITHUB_WORKSPACE\sdk\Sanny Builder 4"
+
+          if (-not (Test-Path $sdkDir)) {
+            throw "CoopAndreas Sanny Builder SDK folder not found at $sdkDir"
+          }
+
+          Copy-Item "$sdkDir\*" $sannyDir -Recurse -Force
+
+      - name: "Compile main.scm"
+        continue-on-error: true
+        run: |
+          $sannyDir = "$env:GITHUB_WORKSPACE\sanny"
+          $mainTxt = "$env:GITHUB_WORKSPACE\scm\main.txt"
+
+          if (-not (Test-Path $mainTxt)) {
+            throw "main.txt not found at $mainTxt"
+          }
+
+          $sannyExe = Get-ChildItem $sannyDir -Recurse -Filter "sanny.exe" | Select-Object -First 1
+          if (-not $sannyExe) {
+            throw "sanny.exe not found"
+          }
+
+          & $sannyExe.FullName /compile $mainTxt
+
+          $possibleOutputs = @(
+            "$env:GITHUB_WORKSPACE\scm\main.scm",
+            "$env:GITHUB_WORKSPACE\main.scm",
+            "$env:GTA_SA_DIR\CoopAndreas\main.scm",
+            "$env:GITHUB_WORKSPACE\data\script\main.scm",
+            "$env:GITHUB_WORKSPACE\scm\data\script\main.scm"
+          )
+
+          $found = $possibleOutputs | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ($found) {
+            Copy-Item $found "$env:GITHUB_WORKSPACE\dist\main.scm" -Force
+            Write-Host "main.scm found at $found"
+          } else {
+            throw "main.scm was not generated"
+          }
+
+      - name: "Debug environment"
         run: |
           Write-Host "GITHUB_WORKSPACE=$env:GITHUB_WORKSPACE"
           Write-Host "GTA_SA_DIR=$env:GTA_SA_DIR"
           Write-Host "PLUGIN_SDK_DIR=$env:PLUGIN_SDK_DIR"
 
-      - name: Show xmake version
-        run: xmake --version
+      - name: "Show xmake version"
+        run: |
+          xmake --version
 
-      - name: Build client
-        run: xmake build client
+      - name: "Build client"
+        run: |
+          xmake build client
 
-      - name: Build server
-        run: xmake build server
+      - name: "Build server"
+        run: |
+          xmake build server
 
-      - name: Build proxy
-        run: xmake build proxy
+      - name: "Build proxy"
+        run: |
+          xmake build proxy
 
-      - name: Collect outputs
+      - name: "Collect outputs"
         run: |
           $dist = "$env:GITHUB_WORKSPACE\dist"
 
           $files = Get-ChildItem -Path "$env:GITHUB_WORKSPACE" -Recurse -File | Where-Object {
-            $_.Name -in @("CoopAndreasSA.dll", "server.exe", "proxy.dll", "eax.dll")
+            $_.Name -in @("CoopAndreasSA.dll", "server.exe", "proxy.dll", "main.scm")
+          }
+
+          if (-not $files) {
+            throw "No build outputs found"
           }
 
           $files | ForEach-Object {
             Copy-Item $_.FullName $dist -Force
           }
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          if ((Test-Path "$dist\proxy.dll") -and -not (Test-Path "$dist\eax.dll")) {
+            Copy-Item "$dist\proxy.dll" "$dist\eax.dll" -Force
+          }
+
+          @"
+          CoopAndreas build artifact
+
+          Included:
+          - CoopAndreasSA.dll
+          - server.exe
+          - proxy.dll
+          - eax.dll (copy of proxy.dll)
+          - main.scm (if Sanny Builder compilation succeeded)
+
+          Notes:
+          - Replace the game's eax.dll with the provided eax.dll after backing up the original as eax_orig.dll.
+          - main.scm is optional in this artifact only if the CI Sanny Builder step failed. If it is missing, compile scm/main.txt manually via Sanny Builder 4.
+          "@ | Set-Content -Path "$dist\README.txt" -Encoding UTF8
+
+          Write-Host "Final dist contents:"
+          Get-ChildItem $dist
+
+      - name: "Upload artifact"
+        uses: "actions/upload-artifact@v4"
         with:
-          name: CoopAndreas-windows-build
-          path: ${{ github.workspace }}\dist\*
+          name: "CoopAndreas-windows-build"
+          path: "${{ github.workspace }}\\dist\\*"
