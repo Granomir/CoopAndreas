@@ -80,16 +80,26 @@ jobs:
           }
 
           Write-Host "Using Sanny Builder: $($sannyExe.FullName)"
-          & $sannyExe.FullName --compile $mainTxt $outScm
+          Write-Host "Compiling: $mainTxt"
+          Write-Host "Output: $outScm"
+
+          & $sannyExe.FullName --no-splash --game sa --compile $mainTxt $outScm
 
           Start-Sleep -Seconds 2
 
+          $logCandidates = @(
+            "$sannyDir\compile.log",
+            "$env:GITHUB_WORKSPACE\compile.log",
+            "$env:GITHUB_WORKSPACE\scm\compile.log"
+          )
+
+          $logFound = $logCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ($logFound) {
+            Write-Host "compile.log found at: $logFound"
+            Get-Content $logFound
+          }
+
           if (-not (Test-Path $outScm)) {
-            $possibleLogs = Get-ChildItem $sannyDir -Recurse -Filter "compile.log" -ErrorAction SilentlyContinue
-            if ($possibleLogs) {
-              Write-Host "compile.log contents:"
-              Get-Content $possibleLogs[0].FullName
-            }
             throw "main.scm was not generated"
           }
 
